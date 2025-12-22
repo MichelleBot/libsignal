@@ -1,4 +1,3 @@
-
 'use strict';
 
 const BaseKeyType = require('./base_key_type');
@@ -48,6 +47,12 @@ class SessionBuilder {
                 }
             }
             record.setSession(session);
+            
+            // Requires the updated session_record.js I provided earlier
+            if (typeof record.removeOldSessions === 'function') {
+                record.removeOldSessions();
+            }
+
             await this.storage.storeSession(fqAddr, record);
         });
     }
@@ -93,19 +98,19 @@ class SessionBuilder {
             }
             theirSignedPubKey = theirEphemeralPubKey;
         }
+
         let sharedSecret;
-        if (!ourEphemeralKey || !theirEphemeralPubKey) {
-            sharedSecret = new Uint8Array(32 * 4);
-        } else {
-            sharedSecret = new Uint8Array(32 * 5);
-        }
-        for (var i = 0; i < 32; i++) {
-            sharedSecret[i] = 0xff;
-        }
+        const secretSize = (!ourEphemeralKey || !theirEphemeralPubKey) ? 32 * 4 : 32 * 5;
+        
+        // Create Uint8Array and fill first 32 bytes with 0xff (Common in WhatsApp/Signal protocol)
+        sharedSecret = new Uint8Array(secretSize);
+        sharedSecret.fill(0xff, 0, 32); 
+
         const ourIdentityKey = await this.storage.getOurIdentity();
         const a1 = curve.calculateAgreement(theirSignedPubKey, ourIdentityKey.privKey);
         const a2 = curve.calculateAgreement(theirIdentityPubKey, ourSignedKey.privKey);
         const a3 = curve.calculateAgreement(theirSignedPubKey, ourSignedKey.privKey);
+        
         if (isInitiator) {
             sharedSecret.set(new Uint8Array(a1), 32);
             sharedSecret.set(new Uint8Array(a2), 32 * 2);
@@ -114,10 +119,12 @@ class SessionBuilder {
             sharedSecret.set(new Uint8Array(a2), 32);
         }
         sharedSecret.set(new Uint8Array(a3), 32 * 3);
+        
         if (ourEphemeralKey && theirEphemeralPubKey) {
             const a4 = curve.calculateAgreement(theirEphemeralPubKey, ourEphemeralKey.privKey);
             sharedSecret.set(new Uint8Array(a4), 32 * 4);
         }
+
         const masterKey = crypto.deriveSecrets(Buffer.from(sharedSecret), Buffer.alloc(32),
                                                Buffer.from("WhisperText"));
         const session = SessionRecord.createEntry();
@@ -161,4 +168,4 @@ class SessionBuilder {
     }
 }
 
-module.exports = SessionBuilder;
+module.exports = SessionBuilder
