@@ -9,6 +9,8 @@ const protobufs = require('./protobufs')
 const queueJob = require('./queue_job')
 
 const VERSION = 3
+const _identityCache = new WeakMap()
+const _registrationIdCache = new WeakMap()
 
 function assertBuffer(value) {
    if (!(value instanceof Buffer)) throw TypeError(`Expected Buffer instead of: ${value.constructor.name}`)
@@ -49,10 +51,24 @@ class SessionCipher {
    async queueJob(awaitable) {
       return await queueJob(this.addr.toString(), awaitable)
    }
+   
+   async _getOurIdentityKey() {
+      if (_identityCache.has(this.storage)) return _identityCache.get(this.storage);
+      const key = await this.storage.getOurIdentity()
+      if (key) _identityCache.set(this.storage, key)
+      return key
+   }
+   
+   async _getOurRegistrationId() {
+      if (_registrationIdCache.has(this.storage)) return _registrationIdCache.get(this.storage)
+      const id = await this.storage.getOurRegistrationId()
+      if (id) _registrationIdCache.set(this.storage, id)
+      return id
+   }
 
    async encrypt(data) {
       assertBuffer(data)
-      const ourIdentityKey = await this.storage.getOurIdentity()
+      const ourIdentityKey = await this._getOurIdentityKey()
       return await this.queueJob(async () => {
          const record = await this.getRecord()
          if (!record) throw new errors.SessionError("No sessions")
@@ -86,9 +102,10 @@ class SessionCipher {
          let type, body
          if (session.pendingPreKey) {
             type = 3
+            const regId = await this._getOurRegistrationId()
             const preKeyMsg = protobufs.PreKeyWhisperMessage.create({
                identityKey: ourIdentityKey.pubKey,
-               registrationId: await this.storage.getOurRegistrationId(),
+               registrationId: regId,
                baseKey: session.pendingPreKey.baseKey,
                signedPreKeyId: session.pendingPreKey.signedKeyId,
                message: result
@@ -189,7 +206,7 @@ class SessionCipher {
       delete chain.messageKeys[message.counter]
       const keys = crypto.deriveSecrets(messageKey, Buffer.alloc(32),
       Buffer.from("WhisperMessageKeys"))
-      const ourIdentityKey = await this.storage.getOurIdentity()
+      const ourIdentityKey = await this._getOurIdentityKey()
       const macInput = Buffer.alloc(messageProto.byteLength + (33 * 2) + 1)
       macInput.set(session.indexInfo.remoteIdentityKey)
       macInput.set(ourIdentityKey.pubKey, 33)
