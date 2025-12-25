@@ -7,7 +7,8 @@
 'use strict';
 
 const _queueAsyncBuckets = new Map();
-const _gcLimit = 1000
+// Sesuai rekomendasi: 1000 cukup untuk bot WA agar tidak overload RAM
+const _gcLimit = 1000; 
 
 async function _asyncQueueExecutor(queue, cleanup) {
     let offset = 0;
@@ -29,6 +30,11 @@ async function _asyncQueueExecutor(queue, cleanup) {
 
             if (limit < queue.length) {
                 if (limit >= _gcLimit) {
+                    const droppedJobs = queue.slice(0, limit);
+                    for (const droppedJob of droppedJobs) {
+                        droppedJob.reject(new Error("Job queue full/GC: Task dropped to prevent memory leak"));
+                    }
+                    
                     queue.splice(0, limit);
                     offset = 0;
                 } else {
