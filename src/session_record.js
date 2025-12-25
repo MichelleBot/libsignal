@@ -267,8 +267,7 @@ class SessionRecord {
          let oldestKey
          let oldestSession
          for (const [key, session] of Object.entries(this.sessions)) {
-            if (session.indexInfo.closed !== -1 &&
-               (!oldestSession || session.indexInfo.closed < oldestSession.indexInfo.closed)) {
+            if (session.indexInfo.closed !== -1 && (!oldestSession || session.indexInfo.closed < oldestSession.indexInfo.closed)) {
                oldestKey = key
                oldestSession = session
             }
@@ -278,6 +277,7 @@ class SessionRecord {
             delete this.sessions[oldestKey]
          } else {
             throw new Error('Corrupt sessions object')
+            break
          }
       }
    }
