@@ -1,25 +1,27 @@
 {
    "name": "@MichelleBot/libsignal",
-   "version": "3.0.0",
-   "description": "Open Whisper Systems libsignal for Node.js",
-   "repository": "MichelleBot/libsignal",
+   "version": "3.1.0",
+   "description": "Optimized Libsignal for Baileys (High Performance)",
    "main": "index.js",
    "types": "index.d.ts",
    "keywords": [
       "signal",
-      "whispersystems",
-      "crypto"
+      "baileys",
+      "whatsapp",
+      "crypto",
+      "protocol"
    ],
-   "license": "GPL-3.0",
+   "license": "MIT",
+   "engines": {
+      "node": ">=18.0.0"
+   },
    "dependencies": {
       "curve25519-js": "^0.0.4",
-      "protobufjs": "6.8.8"
+      "protobufjs": "^7.2.5"
    },
    "files": [
       "src/*",
+      "*.js",
       "index.d.ts"
-   ],
-   "devDependencies": {
-      "eslint": "6.0.1"
-   }
+   ]
 }
