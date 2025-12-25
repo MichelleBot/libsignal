@@ -58,10 +58,6 @@ class SessionEntry {
     }
 
     serialize() {
-        if (!this.currentRatchet || !this.indexInfo) {
-            throw new Error("Cannot serialize incomplete session.");
-        }
-
         const data = {
             registrationId: this.registrationId,
             currentRatchet: {
@@ -123,8 +119,8 @@ class SessionEntry {
         for (const key of Object.keys(chains)) {
             const c = chains[key];
             const messageKeys = {};
-            for (const [idx, msgKey] of Object.entries(c.messageKeys)) {
-                messageKeys[idx] = msgKey.toString('base64');
+            for (const [idx, key] of Object.entries(c.messageKeys)) {
+                messageKeys[idx] = key.toString('base64');
             }
             r[key] = {
                 chainKey: {
@@ -143,8 +139,8 @@ class SessionEntry {
         for (const key of Object.keys(chains_data)) {
             const c = chains_data[key];
             const messageKeys = {};
-            for (const [idx, msgKey] of Object.entries(c.messageKeys)) {
-                messageKeys[idx] = Buffer.from(msgKey, 'base64');
+            for (const [idx, key] of Object.entries(c.messageKeys)) {
+                messageKeys[idx] = Buffer.from(key, 'base64');
             }
             r[key] = {
                 chainKey: {
@@ -301,14 +297,11 @@ class SessionRecord {
                     oldestSession = session;
                 }
             }
-            
             if (oldestKey) {
                 console.info("Removing old closed session:", oldestSession);
                 delete this.sessions[oldestKey];
             } else {
-                // This prevents the bot from crashing if all >40 sessions are open.
-                console.warn(`Warning: Session limit (${CLOSED_SESSIONS_MAX}) reached but all sessions are OPEN. Skipping cleanup to prevent crash.`);
-                break; 
+                throw new Error('Corrupt sessions object');
             }
         }
     }
@@ -320,4 +313,4 @@ class SessionRecord {
     }
 }
 
-module.exports = SessionRecord
+module.exports = SessionRecord;

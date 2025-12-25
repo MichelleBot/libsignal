@@ -1,37 +1,24 @@
 // vim: ts=4:sw=4:expandtab
 
+
 class ProtocolAddress {
 
     static from(encodedAddress) {
-        if (typeof encodedAddress !== 'string') {
-            throw new Error('Invalid address encoding: not a string');
+        if (typeof encodedAddress !== 'string' || !encodedAddress.match(/.*\.\d+/)) {
+            throw new Error('Invalid address encoding');
         }
-
-        // This allows the ID part to contain dots (e.g. 'user.name' or '123@s.whatsapp.net')
-        const lastDotIndex = encodedAddress.lastIndexOf('.');
-        
-        if (lastDotIndex === -1) {
-            throw new Error('Invalid address encoding: missing device ID separator');
-        }
-
-        const id = encodedAddress.substring(0, lastDotIndex);
-        const deviceIdString = encodedAddress.substring(lastDotIndex + 1);
-        const deviceId = parseInt(deviceIdString, 10);
-
-        if (isNaN(deviceId)) {
-            throw new Error('Invalid address encoding: device ID is not a number');
-        }
-
-        return new this(id, deviceId);
+        const parts = encodedAddress.split('.');
+        return new this(parts[0], parseInt(parts[1]));
     }
 
     constructor(id, deviceId) {
         if (typeof id !== 'string') {
             throw new TypeError('id required for addr');
         }
-        
+        if (id.indexOf('.') !== -1) {
+            throw new TypeError('encoded addr detected');
+        }
         this.id = id;
-        
         if (typeof deviceId !== 'number') {
             throw new TypeError('number required for deviceId');
         }
@@ -50,4 +37,4 @@ class ProtocolAddress {
     }
 }
 
-module.exports = ProtocolAddress
+module.exports = ProtocolAddress;

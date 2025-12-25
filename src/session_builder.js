@@ -48,9 +48,6 @@ class SessionBuilder {
                 }
             }
             record.setSession(session);
-            if (typeof record.removeOldSessions === 'function') {
-                record.removeOldSessions();
-            }
             await this.storage.storeSession(fqAddr, record);
         });
     }

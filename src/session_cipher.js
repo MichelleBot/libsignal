@@ -154,11 +154,16 @@ class SessionCipher {
                 errs.push(e);
             }
         }
-        console.error("Failed to decrypt message with any known session...");
-        for (const e of errs) {
-            console.error("Session error:" + e, e.stack);
-        }
-        throw new errors.SessionError("No matching sessions found for message");
+        
+        try {
+            const record = await this.getRecord();
+            if (record) {
+                record.deleteAllSessions();
+                await this.storeRecord(record);
+            }
+        } catch {}
+
+        throw new errors.SessionError("No matching sessions found for message (Auto-Reset triggered)");
     }
 
     async decryptWhisperMessage(data) {
@@ -174,11 +179,6 @@ class SessionCipher {
                 throw new errors.UntrustedIdentityKeyError(this.addr.id, remoteIdentityKey);
             }   
             if (record.isClosed(result.session)) {
-                // It's possible for this to happen when processing a backlog of messages.
-                // The message was, hopefully, just sent back in a time when this session
-                // was the most current.  Simply make a note of it and continue.  If our
-                // actual open session is for reason invalid, that must be handled via
-                // a full SessionError response.
                 console.warn("Decrypted message with closed session.");
             }
             await this.storeRecord(record);
@@ -257,21 +257,18 @@ class SessionCipher {
         if (chain.chainKey.counter >= counter) {
             return;
         }
-        if (counter - chain.chainKey.counter > 2000) {
-            throw new errors.SessionError('Over 2000 messages into the future!');
+        if (counter - chain.chainKey.counter > 10000) {
+            throw new errors.SessionError('Over 10000 messages into the future!');
         }
-
-        // Loop until we reach the desired counter
-        while (chain.chainKey.counter < counter) {
-            if (chain.chainKey.key === undefined) {
-                throw new errors.SessionError('Chain closed');
-            }
-            
-            const key = chain.chainKey.key;
-            chain.messageKeys[chain.chainKey.counter + 1] = crypto.calculateMAC(key, Buffer.from([1]));
-            chain.chainKey.key = crypto.calculateMAC(key, Buffer.from([2]));
-            chain.chainKey.counter += 1;
+        
+        if (chain.chainKey.key === undefined) {
+            throw new errors.SessionError('Chain closed');
         }
+        const key = chain.chainKey.key;
+        chain.messageKeys[chain.chainKey.counter + 1] = crypto.calculateMAC(key, Buffer.from([1]));
+        chain.chainKey.key = crypto.calculateMAC(key, Buffer.from([2]));
+        chain.chainKey.counter += 1;
+        return this.fillMessageKeys(chain, counter);
     }
 
     maybeStepRatchet(session, remoteKey, previousCounter) {

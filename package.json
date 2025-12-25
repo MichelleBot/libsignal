@@ -1,34 +1,25 @@
 {
-   "name": "@whiskeysockets/libsignal-node",
-   "version": "2.0.2",
-   "description": "Optimized Open Whisper Systems libsignal for Node.js (Refactored)",
-   "repository": "MichelleBot/libsignal",
-   "main": "index.js",
-   "types": "index.d.ts",
-   "keywords": [
-      "signal",
-      "whispersystems",
-      "crypto",
-      "baileys",
-      "whatsapp"
-   ],
-   "license": "GPL-3.0",
-   "engines": {
-      "node": ">=14.0.0"
-   },
-   "dependencies": {
-      "curve25519-js": "^0.0.4",
-      "protobufjs": "^6.11.4"
-   },
-   "files": [
-      "src",
-      "index.js",
-      "index.d.ts"
-   ],
-   "devDependencies": {
-      "eslint": "^8.0.0"
-   },
-   "scripts": {
-      "test": "echo \"Error: no test specified\" && exit 1"
-   }
+  "name": "@whiskeysockets/libsignal-node",
+  "version": "2.0.1",
+  "description": "Open Whisper Systems' libsignal for Node.js",
+  "repository": "WhiskeySockets/libsignal-node",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "keywords": [
+    "signal",
+    "whispersystems",
+    "crypto"
+  ],
+  "license": "GPL-3.0",
+  "dependencies": {
+    "curve25519-js": "^0.0.4",
+    "protobufjs": "6.8.8"
+  },
+  "files": [
+    "src/*",
+    "index.d.ts"
+  ],
+  "devDependencies": {
+    "eslint": "6.0.1"
+  }
 }
