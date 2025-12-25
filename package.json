@@ -1,7 +1,7 @@
 {
-   "name": "MichelleBot/libsignal",
+   "name": "@MichelleBot/libsignal",
    "version": "3.0.0",
-   "description": "Open Whisper Systems' libsignal for Node.js",
+   "description": "Open Whisper Systems libsignal for Node.js",
    "repository": "MichelleBot/libsignal",
    "main": "index.js",
    "types": "index.d.ts",
