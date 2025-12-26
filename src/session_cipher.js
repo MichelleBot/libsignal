@@ -1,3 +1,5 @@
+'use strict'
+
 const ChainType = require('./chain_type')
 const ProtocolAddress = require('./protocol_address')
 const SessionBuilder = require('./session_builder')
@@ -9,23 +11,43 @@ const protobufs = require('./protobufs')
 const queueJob = require('./queue_job')
 
 const VERSION = 3
+
+const _recordCache = new Map()
 const _identityCache = new WeakMap()
 const _registrationIdCache = new WeakMap()
 
+const CACHE_LIMIT = 2000
+
+function _pruneCache() {
+   if (_recordCache.size > CACHE_LIMIT) {
+      const keysToDelete = Array.from(_recordCache.keys()).slice(0, Math.floor(CACHE_LIMIT * 0.2))
+      for (const key of keysToDelete) {
+         _recordCache.delete(key)
+      }
+   }
+}
+
 function assertBuffer(value) {
-   if (!(value instanceof Buffer)) throw TypeError(`Expected Buffer instead of: ${value.constructor.name}`)
+   if (!(value instanceof Buffer)) {
+      throw TypeError(`Expected Buffer instead of: ${value.constructor.name}`)
+   }
    return value
 }
 
 class SessionCipher {
    constructor(storage, protocolAddress) {
-      if (!(protocolAddress instanceof ProtocolAddress)) throw new TypeError("protocolAddress must be a ProtocolAddress")
+      if (!(protocolAddress instanceof ProtocolAddress)) {
+         throw new TypeError("protocolAddress must be a ProtocolAddress")
+      }
       this.addr = protocolAddress
       this.storage = storage
+      this.addrString = protocolAddress.toString()
    }
 
    _encodeTupleByte(number1, number2) {
-      if (number1 > 15 || number2 > 15) throw TypeError("Numbers must be 4 bits or less")
+      if (number1 > 15 || number2 > 15) {
+         throw TypeError("Numbers must be 4 bits or less")
+      }
       return (number1 << 4) | number2
    }
 
@@ -33,32 +55,38 @@ class SessionCipher {
       return [byte >> 4, byte & 0xf]
    }
 
-   toString() {
-      return `<SessionCipher(${this.addr.toString()})>`
-   }
-
    async getRecord() {
-      const record = await this.storage.loadSession(this.addr.toString())
-      if (record && !(record instanceof SessionRecord)) throw new TypeError('SessionRecord type expected from loadSession')
+      if (_recordCache.has(this.addrString)) {
+         return _recordCache.get(this.addrString)
+      }
+      const record = await this.storage.loadSession(this.addrString)
+      if (record) {
+         if (!(record instanceof SessionRecord)) {
+            throw new TypeError('SessionRecord type expected from loadSession')
+         }
+         _recordCache.set(this.addrString, record)
+         _pruneCache()
+      }
       return record
    }
 
    async storeRecord(record) {
       record.removeOldSessions()
-      await this.storage.storeSession(this.addr.toString(), record)
+      _recordCache.set(this.addrString, record)
+      await this.storage.storeSession(this.addrString, record)
    }
 
    async queueJob(awaitable) {
-      return await queueJob(this.addr.toString(), awaitable)
+      return await queueJob(this.addrString, awaitable)
    }
-   
+
    async _getOurIdentityKey() {
-      if (_identityCache.has(this.storage)) return _identityCache.get(this.storage);
+      if (_identityCache.has(this.storage)) return _identityCache.get(this.storage)
       const key = await this.storage.getOurIdentity()
       if (key) _identityCache.set(this.storage, key)
       return key
    }
-   
+
    async _getOurRegistrationId() {
       if (_registrationIdCache.has(this.storage)) return _registrationIdCache.get(this.storage)
       const id = await this.storage.getOurRegistrationId()
@@ -71,16 +99,24 @@ class SessionCipher {
       const ourIdentityKey = await this._getOurIdentityKey()
       return await this.queueJob(async () => {
          const record = await this.getRecord()
-         if (!record) throw new errors.SessionError("No sessions")
+         if (!record) {
+            throw new errors.SessionError("No sessions")
+         }
          const session = record.getOpenSession()
-         if (!session) throw new errors.SessionError("No open session")
+         if (!session) {
+            throw new errors.SessionError("No open session")
+         }
          const remoteIdentityKey = session.indexInfo.remoteIdentityKey
-         if (!await this.storage.isTrustedIdentity(this.addr.id, remoteIdentityKey)) throw new errors.UntrustedIdentityKeyError(this.addr.id, remoteIdentityKey)
+         if (!await this.storage.isTrustedIdentity(this.addr.id, remoteIdentityKey)) {
+            throw new errors.UntrustedIdentityKeyError(this.addr.id, remoteIdentityKey)
+         }
          const chain = session.getChain(session.currentRatchet.ephemeralKeyPair.pubKey)
-         if (chain.chainType === ChainType.RECEIVING) throw new Error("Tried to encrypt on a receiving chain")
+         if (chain.chainType === ChainType.RECEIVING) {
+            throw new Error("Tried to encrypt on a receiving chain")
+         }
          this.fillMessageKeys(chain, chain.chainKey.counter + 1)
          const keys = crypto.deriveSecrets(chain.messageKeys[chain.chainKey.counter],
-         Buffer.alloc(32), Buffer.from("WhisperMessageKeys"))
+            Buffer.alloc(32), Buffer.from("WhisperMessageKeys"))
          delete chain.messageKeys[chain.chainKey.counter]
          const msg = protobufs.WhisperMessage.create()
          msg.ephemeralKey = session.currentRatchet.ephemeralKeyPair.pubKey
@@ -110,7 +146,9 @@ class SessionCipher {
                signedPreKeyId: session.pendingPreKey.signedKeyId,
                message: result
             })
-            if (session.pendingPreKey.preKeyId) preKeyMsg.preKeyId = session.pendingPreKey.preKeyId
+            if (session.pendingPreKey.preKeyId) {
+               preKeyMsg.preKeyId = session.pendingPreKey.preKeyId
+            }
             body = Buffer.concat([
                Buffer.from([this._encodeTupleByte(VERSION, VERSION)]),
                Buffer.from(
@@ -130,8 +168,9 @@ class SessionCipher {
    }
 
    async decryptWithSessions(data, sessions) {
-      if (!sessions.length) throw new errors.SessionError("No sessions available")
-      const errs = []
+      if (!sessions.length) {
+         throw new errors.SessionError("No sessions available")
+      }
       for (const session of sessions) {
          let plaintext
          try {
@@ -141,9 +180,7 @@ class SessionCipher {
                session,
                plaintext
             }
-         } catch (e) {
-            errs.push(e)
-         }
+         } catch(e) {}
       }
       try {
          const record = await this.getRecord()
@@ -151,19 +188,22 @@ class SessionCipher {
             record.deleteAllSessions()
             await this.storeRecord(record)
          }
-      } catch {}
-      throw new errors.SessionError("No matching sessions found for message (Auto-Reset triggered)")
+      } catch (e) {}
+      throw new errors.SessionError("No matching sessions found for message")
    }
 
    async decryptWhisperMessage(data) {
       assertBuffer(data)
       return await this.queueJob(async () => {
          const record = await this.getRecord()
-         if (!record) throw new errors.SessionError("No session record")
+         if (!record) {
+            throw new errors.SessionError("No session record")
+         }
          const result = await this.decryptWithSessions(data, record.getSessions())
          const remoteIdentityKey = result.session.indexInfo.remoteIdentityKey
-         if (!await this.storage.isTrustedIdentity(this.addr.id, remoteIdentityKey)) throw new errors.UntrustedIdentityKeyError(this.addr.id, remoteIdentityKey)
-         if (record.isClosed(result.session)) console.warn("Decrypted message with closed session.")
+         if (!await this.storage.isTrustedIdentity(this.addr.id, remoteIdentityKey)) {
+            throw new errors.UntrustedIdentityKeyError(this.addr.id, remoteIdentityKey)
+         }
          await this.storeRecord(record)
          return result.plaintext
       })
@@ -172,12 +212,16 @@ class SessionCipher {
    async decryptPreKeyWhisperMessage(data) {
       assertBuffer(data)
       const versions = this._decodeTupleByte(data[0])
-      if (versions[1] > 3 || versions[0] < 3) throw new Error("Incompatible version number on PreKeyWhisperMessage")
+      if (versions[1] > 3 || versions[0] < 3) {
+         throw new Error("Incompatible version number on PreKeyWhisperMessage")
+      }
       return await this.queueJob(async () => {
          let record = await this.getRecord()
          const preKeyProto = protobufs.PreKeyWhisperMessage.decode(data.slice(1))
          if (!record) {
-            if (preKeyProto.registrationId == null) throw new Error("No registrationId")
+            if (preKeyProto.registrationId == null) {
+               throw new Error("No registrationId")
+            }
             record = new SessionRecord()
          }
          const builder = new SessionBuilder(this.storage, this.addr)
@@ -185,27 +229,37 @@ class SessionCipher {
          const session = record.getSession(preKeyProto.baseKey)
          const plaintext = await this.doDecryptWhisperMessage(preKeyProto.message, session)
          await this.storeRecord(record)
-         if (preKeyId) await this.storage.removePreKey(preKeyId)
+         if (preKeyId) {
+            await this.storage.removePreKey(preKeyId)
+         }
          return plaintext
       })
    }
 
    async doDecryptWhisperMessage(messageBuffer, session) {
       assertBuffer(messageBuffer)
-      if (!session) throw new TypeError("session required")
+      if (!session) {
+         throw new TypeError("session required")
+      }
       const versions = this._decodeTupleByte(messageBuffer[0])
-      if (versions[1] > 3 || versions[0] < 3) throw new Error("Incompatible version number on WhisperMessage")
+      if (versions[1] > 3 || versions[0] < 3) {
+         throw new Error("Incompatible version number on WhisperMessage")
+      }
       const messageProto = messageBuffer.slice(1, -8)
       const message = protobufs.WhisperMessage.decode(messageProto)
       this.maybeStepRatchet(session, message.ephemeralKey, message.previousCounter)
       const chain = session.getChain(message.ephemeralKey)
-      if (chain.chainType === ChainType.SENDING) throw new Error("Tried to decrypt on a sending chain")
+      if (chain.chainType === ChainType.SENDING) {
+         throw new Error("Tried to decrypt on a sending chain")
+      }
       this.fillMessageKeys(chain, message.counter)
-      if (!chain.messageKeys.hasOwnProperty(message.counter)) throw new errors.MessageCounterError('Key used already or never filled')
+      if (!chain.messageKeys.hasOwnProperty(message.counter)) {
+         throw new errors.MessageCounterError('Key used already or never filled')
+      }
       const messageKey = chain.messageKeys[message.counter]
       delete chain.messageKeys[message.counter]
       const keys = crypto.deriveSecrets(messageKey, Buffer.alloc(32),
-      Buffer.from("WhisperMessageKeys"))
+         Buffer.from("WhisperMessageKeys"))
       const ourIdentityKey = await this._getOurIdentityKey()
       const macInput = Buffer.alloc(messageProto.byteLength + (33 * 2) + 1)
       macInput.set(session.indexInfo.remoteIdentityKey)
@@ -268,7 +322,9 @@ class SessionCipher {
    async hasOpenSession() {
       return await this.queueJob(async () => {
          const record = await this.getRecord()
-         if (!record) return false
+         if (!record) {
+            return false
+         }
          return record.haveOpenSession()
       })
    }

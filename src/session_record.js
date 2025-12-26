@@ -1,6 +1,6 @@
 const BaseKeyType = require('./base_key_type')
 
-const CLOSED_SESSIONS_MAX = 40
+const CLOSED_SESSIONS_MAX = 1
 const SESSION_RECORD_VERSION = 'v1'
 
 function assertBuffer(value) {
