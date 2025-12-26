@@ -1,7 +1,7 @@
 'use strict'
 
 const _queueAsyncBuckets = new Map()
-const _gcLimit = 2000
+const _gcLimit = 1000
 
 async function _asyncQueueExecutor(queue, cleanup) {
    let offset = 0
@@ -19,15 +19,16 @@ async function _asyncQueueExecutor(queue, cleanup) {
             }
          }
          if (limit < queue.length) {
-            const jobsToDropCount = queue.length - limit
-            if (jobsToDropCount > 0) {
-               const droppedJobs = queue.splice(limit, jobsToDropCount)
+            if (limit >= _gcLimit) {
+               const droppedJobs = queue.slice(0, limit)
                for (const droppedJob of droppedJobs) {
-                  droppedJob.reject(new Error("Queue Full: Dropping old message"))
+                  droppedJob.reject(new Error("Job queue full/GC: Task dropped to prevent memory leak"))
                }
+               queue.splice(0, limit)
+               offset = 0
+            } else {
+               offset = limit
             }
-            queue.splice(0, limit)
-            offset = 0
          } else {
             break
          }
@@ -45,7 +46,7 @@ module.exports = function(bucket, awaitable) {
    }
    const queue = _queueAsyncBuckets.get(bucket)
    const jobPromise = new Promise((resolve, reject) => {
-      queue.unshift({
+      queue.push({
          awaitable,
          resolve,
          reject
