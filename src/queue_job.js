@@ -1,7 +1,7 @@
 'use strict'
 
 const _queueAsyncBuckets = new Map()
-const _gcLimit = 1000
+const _gcLimit = 10000
 
 async function _asyncQueueExecutor(queue, cleanup) {
    let offset = 0
