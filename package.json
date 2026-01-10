@@ -17,7 +17,8 @@
    },
    "dependencies": {
       "curve25519-js": "^0.0.4",
-      "protobufjs": "^8.0.0"
+      "protobufjs": "^8.0.0",
+      "sodium-native": "^4.0.0"
    },
    "files": [
       "src/*",
